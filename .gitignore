@@ -1,0 +1,41 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+build/
+dist/
+
+# Local tools and operating-system files
+.DS_Store
+.idea/
+.vscode/
+work/
+*.log
+
+# Credentials and environment files
+.env
+.env.*
+*.pem
+*.key
+*credential*.json
+*credentials*.json
+*service-account*.json
+*service_account*.json
+*token*.json
+
+# Active operational configuration
+config/invitation.json
+config/industry_sources.csv
+
+# Candidate, recipient, delivery, and generated output data
+data/*
+outputs/*
+!outputs/.gitkeep

@@ -1,0 +1,33 @@
+name: Feature request
+description: Propose a safe improvement to the workflow
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user problem should be solved?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the workflow and expected result.
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Safety, privacy, and compliance impact
+      description: Explain effects on approval gates, web access, personal data, SMTP delivery, or duplicate protection.
+    validations:
+      required: true
+  - type: checkboxes
+    id: guardrails
+    attributes:
+      label: Guardrails
+      options:
+        - label: This request does not depend on bypassing access controls, guessing contact details, or removing human approval.
+          required: true

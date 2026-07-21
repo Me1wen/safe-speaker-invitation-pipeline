@@ -1,0 +1,14 @@
+include LICENSE
+include README.md
+include CHANGELOG.md
+include SECURITY.md
+include requirements*.txt
+include config/academic_sources.csv
+include config/industry_sources.empty.csv
+include config/industry_sources.example.csv
+include config/invitation.example.json
+exclude config/industry_sources.csv
+exclude config/invitation.json
+recursive-include docs *.md
+recursive-include scripts *.py
+recursive-include tests *.py

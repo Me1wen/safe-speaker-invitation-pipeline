@@ -1,0 +1,14 @@
+{
+  "event_name": "Your Event Name",
+  "event_host": "Your Event Host",
+  "event_date": "Month Day, Year",
+  "event_location": "City, Venue, or Online",
+  "event_description": "a concise description of the event and its audience",
+  "sender_name": "Your Name",
+  "sender_title": "Your Title",
+  "sender_organization": "Your Organization",
+  "sender_email": "you@example.org",
+  "subject_template": "Invitation for {full_name} to speak at {event_name}",
+  "direct_body_template": "Dear {salutation},\n\nI am writing on behalf of {event_host} to invite you to speak at {event_name}, taking place on {event_date} at {event_location}.\n\nThe event is {event_description}. Your work in {topic_fit} would bring valuable insight to our audience, and we would be honored to discuss a speaking role that fits your interests and availability.\n\nIf you are open to the conversation, I would be glad to share the proposed format, timing, audience, and honorarium details.\n\nSincerely,\n{sender_name}\n{sender_title}\n{sender_organization}\n{sender_email}",
+  "routed_body_template": "Dear {route_greeting},\n\nI am writing on behalf of {event_host} to invite {full_name}, {title} at {organization}, to speak at {event_name}, taking place on {event_date} at {event_location}.\n\nThe event is {event_description}. {full_name}'s work in {topic_fit} would bring valuable insight to our audience. Would you please forward this invitation to the appropriate person or advise us on the correct speaking-inquiry route?\n\nI would be glad to share the proposed format, timing, audience, and honorarium details.\n\nSincerely,\n{sender_name}\n{sender_title}\n{sender_organization}\n{sender_email}"
+}
