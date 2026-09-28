@@ -35,8 +35,24 @@ def test_runtime_data_and_active_config_are_ignored():
         "config/industry_sources.csv",
         "data/*",
         "outputs/*",
+        "*.lock",
     ):
         assert value in ignore
+
+
+def test_named_recipient_research_fixtures_are_private_and_excluded_from_release():
+    ignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
+    manifest = (ROOT / "MANIFEST.in").read_text(encoding="utf-8")
+    for value in (
+        "config/campaigns.example.csv",
+        "config/industry_sources.boss_test.csv",
+        "config/industry_targets.example.csv",
+        "config/email_claims.example.csv",
+        "config/email_evidence.example.csv",
+        "docs/CEO_FOUNDER_VERIFICATION.md",
+    ):
+        assert value in ignore
+        assert f"exclude {value}" in manifest
 
 
 def test_public_documentation_contains_no_chinese_text():

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import os
 import re
+import tempfile
 from collections.abc import Iterable
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -20,6 +22,18 @@ EMAIL_RE = re.compile(r"^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$", re.IGNORECASE)
 
 def clean(value: object) -> str:
     return re.sub(r"\s+", " ", str(value or "").strip())
+
+
+MULTILINE_COLUMNS = {"Body Text", "Evidence Summary", "Snippet"}
+
+
+def normalize_multiline(value: object) -> str:
+    """Normalize line endings without destroying intentional paragraph breaks."""
+    return str(value or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+
+
+def clean_cell(column: str, value: object) -> str:
+    return normalize_multiline(value) if column in MULTILINE_COLUMNS else clean(value)
 
 
 def today_iso() -> str:
@@ -53,8 +67,10 @@ def candidate_id(speaker_type: str, name: str, organization: str) -> str:
     return f"{prefix}-{digest}"
 
 
-def draft_id(candidate_id_value: str, subject: str, body: str) -> str:
-    digest = hashlib.sha256(f"{candidate_id_value}|{subject}|{body}".encode()).hexdigest()
+def draft_id(candidate_id_value: str, subject: str, body: str, campaign_id: str = "") -> str:
+    digest = hashlib.sha256(
+        f"{campaign_id}|{candidate_id_value}|{subject}|{normalize_multiline(body)}".encode()
+    ).hexdigest()
     return f"DRAFT-{digest[:16].upper()}"
 
 
@@ -87,26 +103,67 @@ def email_allowed(email: str, domains: Iterable[str]) -> bool:
     return any(host == domain or host.endswith(f".{domain}") for domain in domains)
 
 
+def _compatible_headers(headers: list[str], expected: list[str]) -> bool:
+    """Accept only the exact current schema or an explicitly known legacy schema."""
+    if headers == expected:
+        return True
+    from . import schema
+
+    legacy_candidates = getattr(schema, "V1_0_CANDIDATE_COLUMNS", [])
+    legacy_drafts = getattr(schema, "V1_0_DRAFT_COLUMNS", [])
+    legacy_v11_drafts = getattr(schema, "DRAFT_COLUMNS_V1_1_LEGACY", [])
+    return (expected == schema.CANDIDATE_COLUMNS and headers == legacy_candidates) or (
+        expected == schema.DRAFT_COLUMNS
+        and tuple(headers) in {tuple(legacy_drafts), tuple(legacy_v11_drafts)}
+    )
+
+
+def _legacy_schema_version(headers: list[str], expected: list[str]) -> str:
+    from . import schema
+
+    if expected == schema.DRAFT_COLUMNS and headers == getattr(
+        schema, "DRAFT_COLUMNS_V1_1_LEGACY", []
+    ):
+        return "1.1"
+    return "1.0"
+
+
 def read_csv(path: Path, expected: list[str] | None = None) -> list[dict[str, str]]:
     if not path.exists():
         return []
     with path.open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
         headers = reader.fieldnames or []
-        if expected is not None and headers != expected:
+        if expected is not None and not _compatible_headers(headers, expected):
             raise ValueError(f"{path} columns do not match the required schema. Found: {headers}")
-        return [{key: clean(value) for key, value in row.items() if key} for row in reader]
+        columns = expected or headers
+        rows = [
+            {column: clean_cell(column, row.get(column, "")) for column in columns}
+            for row in reader
+        ]
+        if expected is not None and headers != expected and "Schema Version" in columns:
+            for row in rows:
+                row["Schema Version"] = _legacy_schema_version(headers, expected)
+        return rows
 
 
 def write_csv(path: Path, columns: list[str], rows: Iterable[dict[str, object]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f".{path.name}.tmp")
-    with temporary.open("w", encoding="utf-8-sig", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=columns, extrasaction="ignore")
-        writer.writeheader()
-        for row in rows:
-            writer.writerow({column: row.get(column, "") for column in columns})
-    temporary.replace(path)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8-sig", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=columns, extrasaction="ignore")
+            writer.writeheader()
+            for row in rows:
+                writer.writerow({column: row.get(column, "") for column in columns})
+            handle.flush()
+            os.fsync(handle.fileno())
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def read_table(
@@ -116,7 +173,7 @@ def read_table(
         return read_csv(path, columns)
     if path.suffix.casefold() not in {".xlsx", ".xlsm"}:
         raise ValueError("Input must be CSV, XLSX, or XLSM.")
-    workbook = load_workbook(path, read_only=True, data_only=True)
+    workbook = load_workbook(path, read_only=False, data_only=False)
     try:
         if sheet_name:
             if sheet_name not in workbook.sheetnames:
@@ -126,14 +183,26 @@ def read_table(
             worksheet = workbook.active
         else:
             raise ValueError("Workbook has multiple sheets; provide a sheet name.")
-        values = worksheet.iter_rows(values_only=True)
-        headers = [clean(value) for value in next(values, ())]
-        if headers != columns:
+        cell_rows = worksheet.iter_rows()
+        headers = [clean(cell.value) for cell in next(cell_rows, ())]
+        if not _compatible_headers(headers, columns):
             raise ValueError(f"Workbook columns do not match the required schema. Found: {headers}")
         rows: list[dict[str, str]] = []
-        for values_row in values:
-            row = {header: clean(value) for header, value in zip(headers, values_row, strict=False)}
+        for worksheet_row in cell_rows:
+            for cell in worksheet_row:
+                if cell.data_type == "f":
+                    raise ValueError(
+                        f"Workbook formulas are not allowed in review tables ({cell.coordinate})."
+                    )
+            values_by_header = {
+                header: cell.value for header, cell in zip(headers, worksheet_row, strict=False)
+            }
+            row = {
+                column: clean_cell(column, values_by_header.get(column, "")) for column in columns
+            }
             if any(row.values()):
+                if headers != columns and "Schema Version" in columns:
+                    row["Schema Version"] = _legacy_schema_version(headers, columns)
                 rows.append(row)
         return rows
     finally:
@@ -154,15 +223,30 @@ def write_workbook(
         cell.font = Font(bold=True, color="FFFFFF")
         cell.fill = PatternFill("solid", fgColor="1F4E78")
         cell.alignment = Alignment(wrap_text=True, vertical="center")
-    for row in rows:
-        worksheet.append([row.get(column, "") for column in columns])
+    for row_number, row in enumerate(rows, start=2):
+        for column_number, column in enumerate(columns, start=1):
+            cell = worksheet.cell(row=row_number, column=column_number)
+            cell.value = str(row.get(column, "") or "")
+            # openpyxl otherwise serializes leading '=' as an executable formula.
+            cell.data_type = "s"
+            if column in MULTILINE_COLUMNS:
+                cell.alignment = Alignment(wrap_text=True, vertical="top")
     for column_cells in worksheet.columns:
         width = max(len(clean(cell.value)) for cell in column_cells)
         worksheet.column_dimensions[column_cells[0].column_letter].width = min(
             max(width + 2, 12), 60
         )
     worksheet.auto_filter.ref = worksheet.dimensions
-    workbook.save(path)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.", suffix=path.suffix, dir=path.parent
+    )
+    os.close(descriptor)
+    temporary = Path(temporary_name)
+    try:
+        workbook.save(temporary)
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def candidate_key(row: dict[str, str]) -> tuple[str, str, str]:
@@ -221,6 +305,8 @@ def merge_candidates(
         )
         final["Review Status"] = final.get("Review Status") or "Draft"
         final["Last Checked"] = final.get("Last Checked") or today_iso()
+        final["Schema Version"] = final.get("Schema Version") or "1.1"
+        final["Revision"] = final.get("Revision") or "1"
         final_key = candidate_key(final)
         if all(final_key):
             by_key[final_key] = index

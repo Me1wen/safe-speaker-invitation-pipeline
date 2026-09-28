@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "safe-speaker-invitation-pipeline"
-version = "1.0.0"
+version = "1.2.0"
 description = "A review-first workflow for official-source speaker discovery and safe invitation delivery"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -54,7 +54,7 @@ branch = true
 source = ["speaker_pipeline"]
 
 [tool.coverage.report]
-fail_under = 70
+fail_under = 80
 exclude_also = [
   "if TYPE_CHECKING:",
   "if __name__ == .__main__.:",

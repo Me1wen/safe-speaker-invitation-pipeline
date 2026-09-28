@@ -1,55 +1,112 @@
 # Architecture
 
+## Objective and Non-Goals
+
+The system supports low-volume, relevant speaker invitations through verified official routes with
+human review, global suppression and an auditable SMTP attempt ledger. It does not discover private
+mailboxes, run mass outreach, schedule unattended campaigns, retry automatically, monitor inboxes or
+prove final delivery.
+
 ## Workflow
 
 ```mermaid
 flowchart LR
-    A["Official academic and company pages"] --> B["Allowlisted collectors"]
-    B --> C["Candidate review table"]
-    C -->|"Human sets Approved"| D["Validation gate"]
-    D --> E["Invitation draft generator"]
-    E --> F["Email draft review table"]
-    F -->|"Human sets Approved"| G["Dry-run selection"]
-    G -->|"--send plus confirmation"| H["SMTP delivery"]
-    H --> I["Sending / Sent / Failed ledger"]
+    A["Requested people and claimed addresses"] --> B["Allowlisted official-page collection"]
+    B --> C["Target report and evidence ledger"]
+    C --> D["Accepted current supporting evidence"]
+    D --> E["v2-approved candidate"]
+    E --> F["Policy- and sender-bound draft"]
+    F --> G["Separate v2 draft approval"]
+    G --> H["Dry run / offline doctor"]
+    H --> I["Five-ledger lock and final preflight"]
+    I --> J["Explicitly confirmed TLS SMTP attempt"]
+    J --> K["Sending / Sent / Failed ledger"]
+    K --> L["Provider-evidence reconciliation when uncertain"]
 ```
 
 ## Modules
 
-- `speaker_pipeline.web`: rate-limited official-page client and robots enforcement.
-- `speaker_pipeline.academic`: academic directory discovery and profile validation.
-- `speaker_pipeline.industry`: senior-leader discovery and official contact-route extraction.
-- `speaker_pipeline.common`: canonical table, identity, merge, and workbook helpers.
-- `speaker_pipeline.validation`: candidate approval requirements and QA issues.
-- `speaker_pipeline.legacy`: migration from the original 11/12-column formats.
-- `speaker_pipeline.drafts`: strict template rendering and deterministic Draft IDs.
-- `speaker_pipeline.mailer`: dry-run selection, SMTP configuration, delivery, and ledger states.
+- `speaker_pipeline.web`: rate-limited official-page client, robots enforcement, redirect and
+  public-address controls.
+- `speaker_pipeline.academic` and `speaker_pipeline.industry`: conservative official-site discovery.
+- `speaker_pipeline.targets`: campaign policy, requested people and exact claimed-address inputs.
+- `speaker_pipeline.evidence`: independent identity, role, email and mailbox assertions.
+- `speaker_pipeline.targeted`: one terminal research result per requested target.
+- `speaker_pipeline.validation`: fail-closed candidate/evidence requirements.
+- `speaker_pipeline.approvals`: backward-readable v1 seals and live-required v2 approval integrity.
+- `speaker_pipeline.policy`: campaign window/cap, candidate binding and global-suppression gate.
+- `speaker_pipeline.drafts`: strict rendering and deterministic, candidate/policy/sender-bound drafts.
+- `speaker_pipeline.mailer`: dry-run default, global recipient-attempt checks and conservative SMTP
+  state transitions.
+- `speaker_pipeline.locking`: deterministic cross-process locks for canonical ledgers.
+- `speaker_pipeline.legacy`, `speaker_pipeline.review`, and `speaker_pipeline.common`: migration,
+  reviewed-table merges and canonical CSV/XLSX handling.
 
-## Trust Boundaries
+## Trust and Approval Boundaries
 
-Website content is untrusted input. Collectors apply structural checks but never approve a candidate automatically. Human review is the authority for identity, relevance, contact route, and outreach suitability.
+Website content is untrusted. Every redirect must remain on the configured allowlist and every live
+hostname must resolve only to public addresses. Collection never approves a target.
 
-The candidate table and draft table are separate approval domains. Candidate approval authorizes draft creation, not delivery. Draft approval authorizes selection for delivery, but SMTP is still disabled unless the operator supplies the live-send flag and exact confirmation phrase.
+Requested identity, current role, exact-address evidence, contact ownership and mailbox outcome are
+separate assertions. Targeted approval requires evidence belonging to the same campaign, target and
+candidate, with `Review Status = Accepted`, `Claim Polarity = Supports`, the exact claim value and
+the required current temporal status. Historical targets require explicit campaign permission;
+deceased targets are ineligible. Live policy also requires Campaign `Research As Of`, Candidate
+`Role As Of`, and identity/role/email evidence confirmed or retrieved no earlier than Research As
+Of and inside any evidence effective-date interval.
+
+Candidate and draft approvals are separate. A live-eligible v2 draft seal covers its reviewer/time,
+message and recipient plus the exact candidate-approval hash, complete campaign-policy hash and
+Sender Email/Name/Reply-To. Legacy v1 approvals remain readable for migration but cannot send.
+
+## Live Delivery Contract
+
+Live delivery is permitted only when all of the following remain true:
+
+1. Exactly one matching campaign is `Active`, today is inside its outreach window and
+   `Max Messages` is positive and not exceeded by prior plus selected attempts.
+2. Candidate and draft v2 approvals are valid and the referenced accepted evidence still passes.
+3. Candidate, campaign policy, recipient, route and runtime sender identity still match the draft.
+4. No active email/domain/target/candidate suppression matches.
+5. No duplicate or earlier attempted recipient exists in the canonical delivery history.
+6. The explicit draft, campaign, candidate, evidence and suppression files are all held under locks.
+7. The policy is run again in the mailer's final preflight before SMTP is opened.
+8. TLS settings, `--send`, the campaign ID and `SEND_APPROVED_EMAILS` confirmation are present.
+
+This is a manual command contract, not a scheduler API.
 
 ## Delivery State Machine
 
 ```mermaid
 stateDiagram-v2
     [*] --> Draft
-    Draft --> Approved: Human review
+    Draft --> Approved: Human review creates v2 seal
     Draft --> Rejected: Human review
     Approved --> Sending: Persist before SMTP call
-    Sending --> Sent: Provider accepted message
-    Sending --> Failed: Delivery error recorded
-    Failed --> Approved: Human-authorized retry
-    Sending --> Approved: Human resolution only
+    Sending --> Sent: SMTP accepted, or provider later proves acceptance
+    Sending --> Sending: Timeout/disconnect remains uncertain
+    Sending --> Failed: Explicit permanent refusal, or provider proves rejection
+    Failed --> Approved: Human investigation and reapproval
 ```
 
-`Sending` is deliberately not retried automatically. If the process stops after the provider accepts a message but before `Sent` is saved, automatic retry could create a duplicate.
+`Sent` means SMTP acceptance only. It does not establish inbox placement, reading or reply. A
+timeout may happen after provider acceptance, so an ambiguous exception remains durably `Sending`
+and the batch stops. `scripts/reconcile_delivery.py` may resolve it only from provider-side evidence;
+there is no automatic retry.
 
-## Data Files
+## Canonical Data
 
-- `data/candidates.csv` is the canonical candidate record.
-- `data/email_drafts.csv` is the canonical draft and delivery ledger.
-- XLSX files are review conveniences and are imported back into canonical CSV before live delivery.
-- Runtime data and active invitation/company configuration files are ignored by Git.
+- `config/campaigns.csv`: live campaign authorization and cap.
+- `data/candidates.csv`: reviewed candidate records.
+- `data/evidence.csv`: append-oriented source assertions.
+- `data/suppressions.csv`: global email/domain/target/candidate do-not-contact controls.
+- `data/email_drafts.csv`: reviewed messages and delivery-attempt ledger.
+- `config/industry_targets.csv`, `config/email_claims.csv`, and
+  `config/email_evidence.csv`: research inputs, not delivery authorization.
+- `outputs/industry_target_report.csv`: one terminal row per requested target.
+- XLSX files are review conveniences; canonical CSV files control live delivery.
+
+`create_workspace.py` initializes active industry-outreach tables empty and creates only a non-authorizing
+Draft campaign with `Max Messages = 0`. It copies a placeholder invitation template, but no example
+recipient/research rows or boss-test rows. The named boss/CEO development fixture is excluded from
+the package/release manifest.

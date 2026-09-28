@@ -11,6 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from speaker_pipeline.common import read_table, write_csv
+from speaker_pipeline.evidence import load_evidence
 from speaker_pipeline.schema import CANDIDATE_COLUMNS, QA_COLUMNS
 from speaker_pipeline.validation import validate_candidates
 
@@ -21,12 +22,14 @@ def main() -> None:
     )
     parser.add_argument("--input", type=Path, default=PROJECT_ROOT / "data" / "candidates.csv")
     parser.add_argument("--sheet")
+    parser.add_argument("--evidence", type=Path, default=PROJECT_ROOT / "data" / "evidence.csv")
     parser.add_argument(
         "--qa-output", type=Path, default=PROJECT_ROOT / "outputs" / "candidate_qa.csv"
     )
     args = parser.parse_args()
     rows = read_table(args.input, CANDIDATE_COLUMNS, args.sheet)
-    issues = validate_candidates(rows)
+    evidence = load_evidence(args.evidence) if args.evidence.exists() else []
+    issues = validate_candidates(rows, evidence)
     write_csv(args.qa_output, QA_COLUMNS, issues)
     high = sum(issue["Severity"] == "High" for issue in issues)
     approved = sum(row.get("Review Status") == "Approved" for row in rows)

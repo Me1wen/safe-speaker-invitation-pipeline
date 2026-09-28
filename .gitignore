@@ -19,6 +19,7 @@ dist/
 .vscode/
 work/
 *.log
+*.lock
 
 # Credentials and environment files
 .env
@@ -34,6 +35,18 @@ work/
 # Active operational configuration
 config/invitation.json
 config/industry_sources.csv
+config/campaigns.csv
+config/industry_targets.csv
+config/email_claims.csv
+config/email_evidence.csv
+
+# Private named-recipient research fixtures are intentionally not release assets.
+config/campaigns.example.csv
+config/industry_sources.boss_test.csv
+config/industry_targets.example.csv
+config/email_claims.example.csv
+config/email_evidence.example.csv
+docs/CEO_FOUNDER_VERIFICATION.md
 
 # Candidate, recipient, delivery, and generated output data
 data/*
