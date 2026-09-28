@@ -293,7 +293,10 @@ def test_cross_allowlist_redirect_is_blocked_before_second_request():
     )
     with pytest.raises(FetchError, match="outside Allowed Domains"):
         client.fetch("https://example.com/start", ("example.com",))
-    assert not any(url.startswith("https://evil.test") for url, _ in client.session.calls)
+    assert [url for url, _ in client.session.calls] == [
+        "https://example.com/robots.txt",
+        "https://example.com/start",
+    ]
 
 
 def test_allowlisted_redirect_to_private_address_is_blocked_before_request():
@@ -309,7 +312,10 @@ def test_allowlisted_redirect_to_private_address_is_blocked_before_request():
     )
     with pytest.raises(FetchError, match="non-public address"):
         client.fetch("https://example.com/start", ("example.com",))
-    assert not any("internal.example.com" in url for url, _ in client.session.calls)
+    assert [url for url, _ in client.session.calls] == [
+        "https://example.com/robots.txt",
+        "https://example.com/start",
+    ]
 
 
 def test_live_fetch_rejects_nonstandard_ports_before_request():

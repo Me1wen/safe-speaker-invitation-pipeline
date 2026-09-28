@@ -10,6 +10,9 @@ All notable changes to this project are documented in this file. The project fol
   research workbooks and supported pipeline imports.
 - Exclude the internal campaign fixture from Git as well as package manifests; retain only
   reviewed public configuration and simulated test data.
+- Strengthen redirect regression tests to assert the exact permitted request sequence instead of
+  URL-prefix/substring checks, resolving CodeQL findings in test assertions without suppressing
+  scanning or changing runtime behavior.
 
 ## [1.2.0] - 2026-08-22
 

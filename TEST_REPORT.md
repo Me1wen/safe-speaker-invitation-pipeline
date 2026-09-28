@@ -29,6 +29,11 @@ pull request and main branch; their live results are available in the repository
 
 The detailed August 22 release report below is retained as historical verification evidence.
 
+The first GitHub CodeQL scan flagged two URL-prefix/substring assertions in redirect tests. They
+were replaced with exact request-sequence assertions, which verify that no third request occurs.
+The full local suite was rerun after this test-only change. No scan rule was disabled or alert
+dismissed to publish the update.
+
 ## Original Release Verification — 2026-08-22
 
 ## Scope
