@@ -1,58 +1,133 @@
-# Test Report — 2026-07-21
+# Test Report
 
-## Original packages
+## GitHub Publication Re-verification — 2026-09-27
 
-- Academic package: 1/1 test passed.
-- Industry package: 12/12 tests passed.
-- Speaker-lead/Google Sheets workflow: 15/15 tests passed.
-- Total original tests: 28 passed.
+The v1.2.0 publication candidate was independently retested in a fresh Python 3.13.2 environment
+on macOS, using the runtime versions in `constraints.txt`. Development tools included pytest
+9.1.1, Ruff 0.16.9 and coverage 7.16.2.
 
-The original tests did not cover several real-page false positives or the incompatible industry-to-workflow schema. Those problems motivated the integrated rewrite.
+| Check | Result |
+| --- | --- |
+| Working-tree test suite | 176 passed |
+| Branch-aware package coverage | 81.67%; configured floor 80% |
+| Ruff formatting and static checks | Passed |
+| Python compilation and dependency consistency | Passed |
+| Source distribution and wheel build/integrity | Passed |
+| Private-fixture and operational-data archive exclusions | Passed |
+| Independently extracted source test suite | 176 passed; 81.67% coverage |
+| Clean wheel installation and module imports | Passed; version 1.2.0 |
+| Empty-workspace initialization | Blank recipient/evidence ledgers; Draft campaign, cap 0 |
+| Offline doctor and blank-target verifier | Refused unconfigured workspaces as expected |
+| Default send dry run | Zero drafts; no SMTP connection |
 
-## Integrated package
+The CLI smoke checks blocked socket network activity. Tests used simulated pages and SMTP, not
+live recipients or credentials. Build and dependency downloads were the only network installation
+steps. Release-file inspection found no private research workbook, real recipient address,
+operational ledger or recognizable credential. This is not a production SMTP/inbox-delivery test
+or a formal security certification. GitHub's required multi-version checks run separately on the
+pull request and main branch; their live results are available in the repository's Actions tab.
 
-The project was installed from `requirements.txt` into a new Python 3.12 virtual environment and tested there.
+The detailed August 22 release report below is retained as historical verification evidence.
+
+The first GitHub CodeQL scan flagged two URL-prefix/substring assertions in redirect tests. They
+were replaced with exact request-sequence assertions, which verify that no third request occurs.
+The full local suite was rerun after this test-only change. No scan rule was disabled or alert
+dismissed to publish the update.
+
+## Original Release Verification — 2026-08-22
+
+## Scope
+
+Version 1.2.0 was hardened for a controlled, low-volume outreach pilot. The supported objective is
+human-reviewed discovery, evidence, approval, suppression and delivery tracking. It is not an
+unattended bulk-mailer and it does not treat guessed addresses or an SMTP hand-off as proof of
+recipient delivery.
+
+All verification used deterministic fixtures, fake SMTP objects or offline CLI runs. No real email
+was sent and no live company-page crawl was performed.
+
+## Release gates
+
+The final source tree was tested with Python 3.13.2 on macOS:
 
 ```text
-23 passed
+176 passed
+81.67% branch-aware speaker_pipeline coverage
+Configured coverage floor: 80%
+Ruff static check: passed
+Ruff format check: passed
+compileall: passed
+sdist build: passed
+wheel build: passed
 ```
 
-GitHub-release hardening added repository-metadata tests, Ruff formatting/static checks, and branch-aware coverage reporting. The current core package coverage is 71%, with a repository minimum of 70% enforced through `pyproject.toml` and CI.
+The configured coverage gate measures the reusable `speaker_pipeline` package. A separate
+diagnostic run that also put every thin `scripts/` entry point in the coverage denominator executed
+the same 176 tests successfully and measured 76.87%; that broader number is not substituted for or
+presented as the package gate. CLI behavior is exercised directly by dedicated tests and by the
+clean-package smoke tests below.
 
-Coverage includes:
+## Safety behavior verified
 
-- exclusion of staff, administration, memorial, navigation, and third-party links;
-- academic name/title/email agreement checks;
-- senior industry title and profile-name checks;
-- failure isolation between source organizations;
-- separation of a plain email from its contact-route type;
-- preservation of manually Approved candidates during recollection;
-- high-severity QA blocking before draft generation;
-- separate direct and routed invitation templates;
-- recipient changes forcing a new draft approval;
-- preservation of Sent/Sending ledger rows;
-- dry-run making no SMTP connection;
-- mandatory live-send confirmation phrase;
-- Sending → Sent status persistence with Message-ID;
-- protection against selecting Sent messages again;
-- legacy email-label migration;
-- exact CSV/XLSX review-schema round trips.
+- Only one exact, `Active`, in-window campaign can authorize a live batch.
+- Campaign limits count attempted rows, including `Sending`, `Sent`, `Failed` and rows with an
+  attempt timestamp; a zero limit authorizes no live delivery.
+- Current-role, identity and exact-address evidence must be accepted, supportive, temporally valid,
+  linked to the same target/candidate and fresh relative to the campaign research date.
+- Historical roles remain review-only unless the campaign explicitly allows them.
+- Candidate approval cannot be rebound to another campaign. Live delivery requires a v2 draft seal
+  binding reviewer, approval time, candidate approval, campaign policy and sender identity.
+- Readable legacy v1 approvals cannot authorize live delivery.
+- Global suppressions block email, domain, target ID or candidate ID and are rechecked inside the
+  final locked preflight.
+- Duplicate recipient checks are global by default, not merely campaign-local.
+- The canonical campaign, candidate, evidence, suppression and draft ledgers are locked and reread
+  before SMTP is opened.
+- TLS is mandatory except for explicit localhost tests. A persistence failure before SMTP aborts
+  delivery.
+- Ambiguous SMTP outcomes remain `Sending`; they are never silently changed to `Failed` and retried.
+  Reconciliation requires a human decision, actor, provider reference and exact confirmation text.
+- Permanent 5xx refusal is recorded as `Failed`. `Sent` means provider acceptance only, not inbox
+  placement or readership.
+- Recipient addresses stay hidden in normal CLI output unless `--show-targets` is explicitly used.
+- Negative limits/delays/timeouts are rejected, dry-run opens no SMTP connection, and the offline
+  doctor opens no network connection.
 
-## Live academic sample
+## Clean-package verification
 
-The revised academic collector was run against the configured official MIT, UC Berkeley, and Princeton department pages with a maximum of two profile checks per source.
+The sdist was extracted into a fresh temporary directory and tested independently of the working
+tree:
 
-- Four structurally valid professor rows were retained.
-- `Technical Staff`, `Administrative Staff`, and `In Memoriam` were no longer accepted.
-- The previous malformed `Pieter Abbeel: Faculty Home Page` result was normalized to `Pieter Abbeel` with the correct salutation.
-- Research extraction no longer used navigation/header/footer text.
+```text
+176 passed
+81.67% branch-aware speaker_pipeline coverage
+```
 
-The live result remains a draft for human fact-checking; the software does not approve candidates automatically.
+Additional smoke checks:
 
-## Industry and SMTP boundaries
+- sdist gzip integrity and wheel ZIP integrity passed;
+- the wheel installed with `--no-deps` into a new virtual environment and imported as version
+  `1.2.0`;
+- `create_workspace.py` created blank active configuration plus all four operational ledgers;
+- `doctor.py` failed closed when targets, sources, SMTP settings and an active campaign were absent;
+- `verify_industry_targets.py` failed closed on blank active targets instead of falling back to a
+  packaged example;
+- `send_approved_emails.py` selected zero drafts in dry-run, opened no SMTP connection and sent no
+  email; and
+- archive inspection found zero private named-recipient fixtures, claimed-address fixtures or the
+  private named-recipient verification report.
 
-- No live industry crawl was performed because no real target companies were supplied. Industry behavior was tested with deterministic official-site fixtures.
-- No real SMTP credentials were used and no real email was sent.
-- A full draft-generation test produced one personalized invitation.
-- An unapproved draft selected zero delivery targets.
-- An Approved draft appeared in dry-run, while an incorrect confirmation phrase blocked live delivery before SMTP configuration was read.
+## Explicit limits
+
+- No real SMTP account, provider log, bounce feed or inbox was available, so real delivery is not
+  claimed.
+- No live crawl was used in release verification. Official-source retrieval remains opt-in and
+  should be rerun immediately before a real campaign.
+- Public evidence can support an address assertion; it cannot prove current mailbox existence,
+  personal readership or consent.
+- Approval hashes detect stale or accidental changes. They are not cryptographic signatures against
+  an operator who can edit both code and canonical ledgers.
+- A process interruption after an SMTP hand-off cannot be made transactionally idempotent with SMTP
+  alone. The row intentionally remains `Sending` until provider-log reconciliation.
+- Private target lists and operational suppression data are excluded from distributable archives.
+  They must be managed in the deployment workspace and backed up separately.

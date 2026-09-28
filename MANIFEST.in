@@ -1,14 +1,30 @@
 include LICENSE
+include .gitignore
 include README.md
 include CHANGELOG.md
 include SECURITY.md
+include TEST_REPORT.md
+include CONTRIBUTING.md
+include CODE_OF_CONDUCT.md
 include requirements*.txt
+include constraints.txt
 include config/academic_sources.csv
 include config/industry_sources.empty.csv
 include config/industry_sources.example.csv
 include config/invitation.example.json
 exclude config/industry_sources.csv
 exclude config/invitation.json
+exclude config/campaigns.csv
+exclude config/industry_targets.csv
+exclude config/email_claims.csv
+exclude config/email_evidence.csv
+exclude config/industry_sources.boss_test.csv
+exclude config/campaigns.example.csv
+exclude config/industry_targets.example.csv
+exclude config/email_claims.example.csv
+exclude config/email_evidence.example.csv
 recursive-include docs *.md
+recursive-include .github *.md *.yml *.yaml
 recursive-include scripts *.py
 recursive-include tests *.py
+exclude docs/CEO_FOUNDER_VERIFICATION.md

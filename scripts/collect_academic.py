@@ -12,6 +12,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from speaker_pipeline.academic import AcademicSource, collect_academic
 from speaker_pipeline.common import merge_candidates, read_csv, read_table, write_csv
+from speaker_pipeline.locking import LedgerLock
 from speaker_pipeline.schema import ACADEMIC_SOURCE_COLUMNS, CANDIDATE_COLUMNS
 from speaker_pipeline.web import OfficialWebClient
 
@@ -31,22 +32,23 @@ def main() -> None:
 
     source_rows = read_csv(args.sources, ACADEMIC_SOURCE_COLUMNS)
     sources = [AcademicSource.from_row(row) for row in source_rows]
-    existing = (
-        read_table(args.review, CANDIDATE_COLUMNS, args.sheet) if args.review.exists() else []
-    )
     client = OfficialWebClient(
         allow_live_fetch=args.allow_live_fetch,
         delay_seconds=args.delay,
         timeout_seconds=args.timeout,
     )
     discovered, warnings = collect_academic(sources, client, limit_per_source=args.limit_per_source)
-    merged = merge_candidates(existing, discovered)
     output = (
         args.review
         if args.review.suffix.casefold() == ".csv"
         else PROJECT_ROOT / "data" / "candidates.csv"
     )
-    write_csv(output, CANDIDATE_COLUMNS, merged)
+    with LedgerLock(output):
+        existing = (
+            read_table(args.review, CANDIDATE_COLUMNS, args.sheet) if args.review.exists() else []
+        )
+        merged = merge_candidates(existing, discovered)
+        write_csv(output, CANDIDATE_COLUMNS, merged)
     print(f"Academic sources: {len(sources)}")
     print(f"Newly discovered valid rows: {len(discovered)}")
     print(f"Review rows after merge: {len(merged)}")

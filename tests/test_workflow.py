@@ -2,9 +2,11 @@ from copy import deepcopy
 
 import pytest
 
+from speaker_pipeline.approvals import approve_row
 from speaker_pipeline.common import merge_candidates
 from speaker_pipeline.drafts import generate_drafts
 from speaker_pipeline.mailer import MailSettings, deliver_approved_drafts
+from speaker_pipeline.policy import DeliveryAuthorization
 from speaker_pipeline.schema import CANDIDATE_COLUMNS
 from speaker_pipeline.validation import approved_candidates, validate_candidates
 
@@ -148,14 +150,14 @@ def test_mailer_is_dry_run_by_default_and_never_connects():
         return FakeServer()
 
     result = deliver_approved_drafts(rows, settings(), connector=connector)
-    assert result == {"selected": 1, "sent": 0, "failed": 0}
+    assert result == {"selected": 1, "sent": 0, "failed": 0, "uncertain": 0}
     assert not called
     assert rows[0]["Draft Status"] == "Approved"
 
 
 def test_live_send_requires_phrase_and_records_sending_then_sent():
     rows = generate_drafts([candidate()], config())
-    rows[0]["Draft Status"] = "Approved"
+    approve_row(rows[0], "reviewer@example.org", record_type="draft")
     with pytest.raises(ValueError, match="SEND_APPROVED_EMAILS"):
         deliver_approved_drafts(rows, settings(), send=True, confirmation="wrong")
 
@@ -168,9 +170,14 @@ def test_live_send_requires_phrase_and_records_sending_then_sent():
         confirmation="SEND_APPROVED_EMAILS",
         delay_seconds=0,
         persist=lambda updated: snapshots.append(deepcopy(updated)),
+        campaign_id=rows[0]["Campaign ID"],
+        lock_held=True,
+        preflight=lambda _context: DeliveryAuthorization(
+            rows[0]["Campaign ID"], "sha256-policy:test", 1, 0, 0
+        ),
         connector=lambda _settings: server,
     )
-    assert result == {"selected": 1, "sent": 1, "failed": 0}
+    assert result == {"selected": 1, "sent": 1, "failed": 0, "uncertain": 0}
     assert snapshots[0][0]["Draft Status"] == "Sending"
     assert snapshots[-1][0]["Draft Status"] == "Sent"
     assert rows[0]["Sent At"]

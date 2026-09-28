@@ -11,6 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from speaker_pipeline.common import read_csv, write_workbook
+from speaker_pipeline.locking import LedgerLock
 from speaker_pipeline.schema import CANDIDATE_COLUMNS, DRAFT_COLUMNS
 
 
@@ -30,7 +31,8 @@ def main() -> None:
         columns, sheet = DRAFT_COLUMNS, "Email Drafts"
         source = args.input or PROJECT_ROOT / "data" / "email_drafts.csv"
         output = args.output or PROJECT_ROOT / "outputs" / "email_draft_review.xlsx"
-    rows = read_csv(source, columns)
+    with LedgerLock(source):
+        rows = read_csv(source, columns)
     write_workbook(output, sheet, columns, rows)
     print(f"Rows exported: {len(rows)}")
     print(f"Workbook: {output}")
